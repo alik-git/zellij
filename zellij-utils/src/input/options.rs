@@ -85,6 +85,10 @@ pub struct Options {
     pub mouse_mode: Option<bool>,
     #[clap(long, value_parser)]
     #[serde(default)]
+    /// Set how many lines each mouse wheel step scrolls
+    pub mouse_scroll_lines: Option<usize>,
+    #[clap(long, value_parser)]
+    #[serde(default)]
     /// Set display of the pane frames (true or false)
     pub pane_frames: Option<bool>,
     #[clap(long, value_parser)]
@@ -318,6 +322,7 @@ impl Options {
     // TODO: Maybe a good candidate for a macro?
     pub fn merge(&self, other: Options) -> Options {
         let mouse_mode = other.mouse_mode.or(self.mouse_mode);
+        let mouse_scroll_lines = other.mouse_scroll_lines.or(self.mouse_scroll_lines);
         let pane_frames = other.pane_frames.or(self.pane_frames);
         let auto_layout = other.auto_layout.or(self.auto_layout);
         let mirror_session = other.mirror_session.or(self.mirror_session);
@@ -397,6 +402,7 @@ impl Options {
             layout_dir,
             theme_dir,
             mouse_mode,
+            mouse_scroll_lines,
             pane_frames,
             mirror_session,
             on_force_close,
@@ -453,6 +459,7 @@ impl Options {
 
         let simplified_ui = merge_bool(other.simplified_ui, self.simplified_ui);
         let mouse_mode = merge_bool(other.mouse_mode, self.mouse_mode);
+        let mouse_scroll_lines = other.mouse_scroll_lines.or(self.mouse_scroll_lines);
         let pane_frames = merge_bool(other.pane_frames, self.pane_frames);
         let auto_layout = merge_bool(other.auto_layout, self.auto_layout);
         let mirror_session = merge_bool(other.mirror_session, self.mirror_session);
@@ -532,6 +539,7 @@ impl Options {
             layout_dir,
             theme_dir,
             mouse_mode,
+            mouse_scroll_lines,
             pane_frames,
             mirror_session,
             on_force_close,

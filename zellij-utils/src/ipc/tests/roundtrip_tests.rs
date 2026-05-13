@@ -442,6 +442,7 @@ fn test_client_messages() {
                 layout_dir: Some(PathBuf::from("layout_dir")),
                 theme_dir: Some(PathBuf::from("theme_dir")),
                 mouse_mode: Some(true),
+                mouse_scroll_lines: Some(1),
                 pane_frames: Some(true),
                 mirror_session: Some(true),
                 on_force_close: Some(OnForceClose::Quit),

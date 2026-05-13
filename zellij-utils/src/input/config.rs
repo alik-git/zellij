@@ -659,6 +659,7 @@ mod config_test {
             layout_dir "/path/to/my/layout-dir"
             theme_dir "/path/to/my/theme-dir"
             mouse_mode false
+            mouse_scroll_lines 1
             pane_frames false
             mirror_session true
             on_force_close "quit"
@@ -714,6 +715,11 @@ mod config_test {
         assert_eq!(
             config.options.mouse_mode,
             Some(false),
+            "Option set in config"
+        );
+        assert_eq!(
+            config.options.mouse_scroll_lines,
+            Some(1),
             "Option set in config"
         );
         assert_eq!(

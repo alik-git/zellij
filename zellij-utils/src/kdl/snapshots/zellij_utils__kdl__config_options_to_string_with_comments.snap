@@ -1,5 +1,6 @@
 ---
 source: zellij-utils/src/kdl/mod.rs
+assertion_line: 7211
 expression: fake_document.to_string()
 ---
  
@@ -69,6 +70,13 @@ theme_dir "/tmp/themes"
 //   - false
 // 
 mouse_mode false
+ 
+// Configure how many lines are scrolled for each mouse wheel event.
+// Increase this for faster mouse wheel scrolling.
+// Valid values: positive integers
+// Default value: 3
+// 
+// mouse_scroll_lines 3
  
 // Toggle having pane frames around the panes
 // Options:

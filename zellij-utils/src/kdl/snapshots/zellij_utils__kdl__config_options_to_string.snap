@@ -1,5 +1,6 @@
 ---
 source: zellij-utils/src/kdl/mod.rs
+assertion_line: 7164
 expression: fake_document.to_string()
 ---
 simplified_ui true
@@ -11,6 +12,7 @@ default_layout "compact"
 layout_dir "/tmp/layouts"
 theme_dir "/tmp/themes"
 mouse_mode false
+mouse_scroll_lines 1
 pane_frames false
 mirror_session true
 on_force_close "quit"
@@ -31,3 +33,4 @@ disable_session_metadata true
 support_kitty_keyboard_protocol false
 web_server true
 web_sharing "disabled"
+

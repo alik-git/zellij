@@ -735,6 +735,7 @@ pub enum ScreenInstruction {
         copy_command: Option<String>,
         copy_to_clipboard: Option<Clipboard>,
         copy_on_select: bool,
+        mouse_scroll_lines: usize,
         auto_layout: bool,
         rounded_corners: bool,
         hide_session_name: bool,
@@ -1412,6 +1413,7 @@ pub(crate) struct Screen {
     web_sharing: WebSharing,
     current_pane_group: Rc<RefCell<PaneGroups>>,
     advanced_mouse_actions: bool,
+    mouse_scroll_lines: usize,
     mouse_hover_effects: bool,
     visual_bell: bool,
     focus_follows_mouse: bool,
@@ -1540,6 +1542,7 @@ impl Screen {
         web_clients_allowed: bool,
         web_sharing: WebSharing,
         advanced_mouse_actions: bool,
+        mouse_scroll_lines: usize,
         mouse_hover_effects: bool,
         visual_bell: bool,
         focus_follows_mouse: bool,
@@ -1598,6 +1601,7 @@ impl Screen {
             current_pane_group: Rc::new(RefCell::new(current_pane_group)),
             currently_marking_pane_group: Rc::new(RefCell::new(HashMap::new())),
             advanced_mouse_actions,
+            mouse_scroll_lines,
             mouse_hover_effects,
             visual_bell,
             focus_follows_mouse,
@@ -2957,6 +2961,7 @@ impl Screen {
             self.current_pane_group.clone(),
             self.currently_marking_pane_group.clone(),
             self.advanced_mouse_actions,
+            self.mouse_scroll_lines,
             self.mouse_hover_effects,
             self.focus_follows_mouse,
             self.mouse_click_through,
@@ -4555,6 +4560,7 @@ impl Screen {
         copy_command: Option<String>,
         copy_to_clipboard: Option<Clipboard>,
         copy_on_select: bool,
+        mouse_scroll_lines: usize,
         auto_layout: bool,
         rounded_corners: bool,
         hide_session_name: bool,
@@ -4583,6 +4589,7 @@ impl Screen {
         self.auto_layout = auto_layout;
         self.copy_options.command = copy_command.clone();
         self.copy_options.copy_on_select = copy_on_select;
+        self.mouse_scroll_lines = mouse_scroll_lines;
         self.draw_pane_frames = pane_frames;
         self.advanced_mouse_actions = advanced_mouse_actions;
         self.mouse_hover_effects = mouse_hover_effects;
@@ -4606,6 +4613,7 @@ impl Screen {
             tab.update_default_editor(self.default_editor.clone());
             tab.update_auto_layout(auto_layout);
             tab.update_copy_options(&self.copy_options);
+            tab.update_mouse_scroll_lines(mouse_scroll_lines);
             tab.set_pane_frames(pane_frames);
             tab.update_arrow_fonts(should_support_arrow_fonts);
             tab.update_advanced_mouse_actions(advanced_mouse_actions);
@@ -5723,6 +5731,7 @@ pub(crate) fn screen_thread_main(
         .unwrap_or(false);
     let web_sharing = config_options.web_sharing.unwrap_or_else(Default::default);
     let advanced_mouse_actions = config_options.advanced_mouse_actions.unwrap_or(true);
+    let mouse_scroll_lines = config_options.mouse_scroll_lines.unwrap_or(3);
     let mouse_hover_effects = config_options.mouse_hover_effects.unwrap_or(true);
     let visual_bell = config_options.visual_bell.unwrap_or(true);
     let focus_follows_mouse = config_options.focus_follows_mouse.unwrap_or(false);
@@ -5764,6 +5773,7 @@ pub(crate) fn screen_thread_main(
         web_clients_allowed,
         web_sharing,
         advanced_mouse_actions,
+        mouse_scroll_lines,
         mouse_hover_effects,
         visual_bell,
         focus_follows_mouse,
@@ -6717,11 +6727,12 @@ pub(crate) fn screen_thread_main(
                 _completion_tx, // the action ends here, dropping this will release anything
                                 // waiting for it
             ) => {
+                let mouse_scroll_lines = screen.mouse_scroll_lines;
                 active_tab_and_connected_client_id!(
                     screen,
                     client_id,
                     |tab: &mut Tab, client_id: ClientId| tab
-                        .handle_scrollwheel_up(&point, 3, client_id), ?
+                        .handle_scrollwheel_up(&point, mouse_scroll_lines, client_id), ?
                 );
                 screen.render(None)?;
             },
@@ -6743,11 +6754,12 @@ pub(crate) fn screen_thread_main(
                 _completion_tx, // the action ends here, dropping this will release anything
                                 // waiting for it
             ) => {
+                let mouse_scroll_lines = screen.mouse_scroll_lines;
                 active_tab_and_connected_client_id!(
                     screen,
                     client_id,
                     |tab: &mut Tab, client_id: ClientId| tab
-                        .handle_scrollwheel_down(&point, 3, client_id), ?
+                        .handle_scrollwheel_down(&point, mouse_scroll_lines, client_id), ?
                 );
                 screen.render(None)?;
             },
@@ -8817,6 +8829,7 @@ pub(crate) fn screen_thread_main(
                 copy_to_clipboard,
                 copy_command,
                 copy_on_select,
+                mouse_scroll_lines,
                 auto_layout,
                 rounded_corners,
                 hide_session_name,
@@ -8841,6 +8854,7 @@ pub(crate) fn screen_thread_main(
                         copy_command,
                         copy_to_clipboard,
                         copy_on_select,
+                        mouse_scroll_lines,
                         auto_layout,
                         rounded_corners,
                         hide_session_name,
