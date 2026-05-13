@@ -272,6 +272,7 @@ fn create_new_tab(size: Size, default_mode: ModeInfo) -> Tab {
         current_group,
         currently_marking_pane_group,
         advanced_mouse_actions,
+        3,     // mouse_scroll_lines
         true,  // mouse_hover_effects
         false, // focus_follows_mouse
         false, // mouse_click_through
@@ -359,6 +360,7 @@ fn create_new_tab_without_pane_frames(size: Size, default_mode: ModeInfo) -> Tab
         current_group,
         currently_marking_pane_group,
         advanced_mouse_actions,
+        3,     // mouse_scroll_lines
         true,  // mouse_hover_effects
         false, // focus_follows_mouse
         false, // mouse_click_through
@@ -461,6 +463,7 @@ fn create_new_tab_with_swap_layouts(
         current_group,
         currently_marking_pane_group,
         advanced_mouse_actions,
+        3,     // mouse_scroll_lines
         true,  // mouse_hover_effects
         false, // focus_follows_mouse
         false, // mouse_click_through
@@ -564,6 +567,7 @@ fn create_new_tab_with_os_api(
         current_group,
         currently_marking_pane_group,
         advanced_mouse_actions,
+        3,     // mouse_scroll_lines
         true,  // mouse_hover_effects
         false, // focus_follows_mouse
         false, // mouse_click_through
@@ -653,6 +657,7 @@ fn create_new_tab_with_layout(size: Size, default_mode: ModeInfo, layout: &str) 
         current_group,
         currently_marking_pane_group,
         advanced_mouse_actions,
+        3,     // mouse_scroll_lines
         true,  // mouse_hover_effects
         false, // focus_follows_mouse
         false, // mouse_click_through
@@ -756,6 +761,7 @@ fn create_new_tab_with_mock_pty_writer(
         current_group,
         currently_marking_pane_group,
         advanced_mouse_actions,
+        3,     // mouse_scroll_lines
         true,  // mouse_hover_effects
         false, // focus_follows_mouse
         false, // mouse_click_through
@@ -850,6 +856,7 @@ fn create_new_tab_with_sixel_support(
         current_group,
         currently_marking_pane_group,
         advanced_mouse_actions,
+        3,     // mouse_scroll_lines
         true,  // mouse_hover_effects
         false, // focus_follows_mouse
         false, // mouse_click_through
@@ -12557,6 +12564,7 @@ fn create_new_tab_with_plugin_receiver(
         current_group,
         currently_marking_pane_group,
         advanced_mouse_actions,
+        3,     // mouse_scroll_lines
         true,  // mouse_hover_effects
         false, // focus_follows_mouse
         false, // mouse_click_through
@@ -14341,6 +14349,7 @@ fn create_new_tab_with_server_receiver(
         current_group,
         currently_marking_pane_group,
         true,  // advanced_mouse_actions
+        3,     // mouse_scroll_lines
         true,  // mouse_hover_effects
         false, // focus_follows_mouse
         false, // mouse_click_through

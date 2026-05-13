@@ -420,6 +420,7 @@ impl SessionMetaData {
                     copy_command: new_config.options.copy_command,
                     copy_to_clipboard: new_config.options.copy_clipboard,
                     copy_on_select: new_config.options.copy_on_select.unwrap_or(true),
+                    mouse_scroll_lines: new_config.options.mouse_scroll_lines.unwrap_or(3),
                     auto_layout: new_config.options.auto_layout.unwrap_or(true),
                     rounded_corners: new_config.ui.pane_frames.rounded_corners,
                     hide_session_name: new_config.ui.pane_frames.hide_session_name,

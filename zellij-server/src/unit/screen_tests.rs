@@ -310,6 +310,7 @@ fn create_new_screen(
         false,
         web_sharing,
         advanced_mouse_actions,
+        3, // mouse_scroll_lines
         mouse_hover_effects,
         visual_bell,
         false, // focus_follows_mouse
@@ -5373,6 +5374,7 @@ fn create_new_screen_with_message_capture(
         false,
         web_sharing,
         true,
+        3, // mouse_scroll_lines
         true,
         visual_bell,
         false, // focus_follows_mouse
@@ -8443,6 +8445,7 @@ fn create_new_screen_with_forward_capture(size: Size) -> (Screen, ForwardCapture
         false,
         web_sharing,
         true,
+        3, // mouse_scroll_lines
         true,
         visual_bell,
         false, // focus_follows_mouse
@@ -9026,6 +9029,7 @@ fn create_new_screen_with_theme_capture(size: Size) -> (Screen, ThemeCapture) {
         false,
         web_sharing,
         true,
+        3, // mouse_scroll_lines
         true,
         true,
         false,
@@ -9516,6 +9520,7 @@ fn create_non_mirrored_screen(size: Size) -> Screen {
         false,
         WebSharing::Off,
         true,  // advanced_mouse_actions
+        3,     // mouse_scroll_lines
         true,  // mouse_hover_effects
         true,  // visual_bell
         false, // focus_follows_mouse
