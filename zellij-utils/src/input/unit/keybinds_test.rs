@@ -29,6 +29,27 @@ fn can_define_keybindings_in_configfile() {
 }
 
 #[test]
+fn can_define_smart_copy_keybinding_in_configfile() {
+    let config_contents = r#"
+        keybinds {
+            normal {
+                bind "Ctrl c" { SmartCopy; }
+            }
+        }
+    "#;
+    let config = Config::from_kdl(config_contents, None).unwrap();
+    let ctrl_c_normal_mode_action = config.keybinds.get_actions_for_key_in_mode(
+        &InputMode::Normal,
+        &KeyWithModifier::new(BareKey::Char('c')).with_ctrl_modifier(),
+    );
+    assert_eq!(
+        ctrl_c_normal_mode_action,
+        Some(&vec![Action::SmartCopy]),
+        "SmartCopy keybinding successfully defined in config"
+    );
+}
+
+#[test]
 fn can_define_multiple_keybinds_for_same_action() {
     let config_contents = r#"
         keybinds {

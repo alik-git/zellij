@@ -78,6 +78,7 @@ macro_rules! parse_kdl_action_arguments {
                 "SetLightTheme" => Ok(Action::SetLightTheme),
                 "ToggleTheme" => Ok(Action::ToggleTheme),
                 "Copy" => Ok(Action::Copy),
+                "SmartCopy" => Ok(Action::SmartCopy),
                 "Confirm" => Ok(Action::Confirm),
                 "Deny" => Ok(Action::Deny),
                 "ToggleMouseMode" => Ok(Action::ToggleMouseMode),
@@ -1214,6 +1215,7 @@ impl Action {
                 Some(node)
             },
             Action::Copy => Some(KdlNode::new("Copy")),
+            Action::SmartCopy => Some(KdlNode::new("SmartCopy")),
             Action::SearchInput { input: bytes } => {
                 let mut node = KdlNode::new("SearchInput");
                 for byte in bytes {
@@ -1628,6 +1630,7 @@ impl TryFrom<(&KdlNode, &Options)> for Action {
                 })
             },
             "Copy" => parse_kdl_action_arguments!(action_name, action_arguments, kdl_action),
+            "SmartCopy" => parse_kdl_action_arguments!(action_name, action_arguments, kdl_action),
             "Clear" => parse_kdl_action_arguments!(action_name, action_arguments, kdl_action),
             "Confirm" => parse_kdl_action_arguments!(action_name, action_arguments, kdl_action),
             "Deny" => parse_kdl_action_arguments!(action_name, action_arguments, kdl_action),

@@ -277,6 +277,7 @@ message Action {
     SetDarkThemeAction set_dark_theme = 137;
     SetLightThemeAction set_light_theme = 138;
     ToggleThemeAction toggle_theme = 139;
+    SmartCopyAction smart_copy = 140;
   }
 }
 
@@ -329,6 +330,7 @@ message SetDarkThemeAction {}
 message SetLightThemeAction {}
 message ToggleThemeAction {}
 message CopyAction {}
+message SmartCopyAction {}
 message ConfirmAction {}
 message DenyAction {}
 message ToggleMouseModeAction {}
