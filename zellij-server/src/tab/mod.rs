@@ -4739,6 +4739,11 @@ impl Tab {
     }
 
     pub fn copy_selection(&self, client_id: ClientId) -> Result<()> {
+        self.copy_selection_if_active(client_id)?;
+        Ok(())
+    }
+
+    pub fn copy_selection_if_active(&self, client_id: ClientId) -> Result<bool> {
         let selected_text = self
             .get_active_pane(client_id)
             .and_then(|p| p.get_selected_text(client_id));
@@ -4757,9 +4762,17 @@ impl Tab {
                     format!("failed to inform plugins about copy selection for client {client_id}")
                 })
                 .non_fatal();
+            return Ok(true);
         }
-        Ok(())
+        Ok(false)
     }
+
+    pub fn reset_selection(&mut self, client_id: ClientId) {
+        if let Some(active_pane) = self.get_active_pane_mut(client_id) {
+            active_pane.reset_selection(Some(client_id));
+        }
+    }
+
     pub fn copy_text_to_clipboard(&self, text: &str) -> Result<()> {
         self.write_selection_to_clipboard(text)
             .with_context(|| format!("failed to write text to clipboard"))?;

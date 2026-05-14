@@ -359,6 +359,13 @@ pub enum ScreenInstruction {
         Option<NotificationEnd>,
     ), // bool ->
     // is_kitty_keyboard_protocol
+    SmartCopy(
+        Option<KeyWithModifier>,
+        Option<Vec<u8>>,
+        Option<bool>,
+        ClientId,
+        Option<NotificationEnd>,
+    ),
     Resize(ClientId, ResizeStrategy, Option<NotificationEnd>),
     SwitchFocus(ClientId, Option<NotificationEnd>),
     FocusNextPane(ClientId, Option<NotificationEnd>),
@@ -1016,6 +1023,7 @@ impl From<&ScreenInstruction> for ScreenContext {
             ScreenInstruction::ScrollDownAt(..) => ScreenContext::ScrollDownAt,
             ScreenInstruction::MouseEvent(..) => ScreenContext::MouseEvent,
             ScreenInstruction::Copy(..) => ScreenContext::Copy,
+            ScreenInstruction::SmartCopy(..) => ScreenContext::Copy,
             ScreenInstruction::ToggleTab(..) => ScreenContext::ToggleTab,
             ScreenInstruction::AddClient(..) => ScreenContext::AddClient,
             ScreenInstruction::RemoveClient(..) => ScreenContext::RemoveClient,
@@ -7463,6 +7471,69 @@ pub(crate) fn screen_thread_main(
             ) => {
                 active_tab!(screen, client_id, |tab: &mut Tab| tab
                     .copy_selection(client_id), ?);
+                screen.render(None)?;
+            },
+            ScreenInstruction::SmartCopy(
+                key_with_modifier,
+                raw_bytes,
+                is_kitty_keyboard_protocol,
+                client_id,
+                _completion_tx, // the action ends here, dropping this will release anything
+                                // waiting for it
+            ) => {
+                let mut session_state_changed = false;
+                let intercepted_plugin_id = keybind_intercepts.get(&client_id).copied();
+                let plugin_senders = screen.bus.senders.clone();
+                active_tab_and_connected_client_id!(
+                    screen,
+                    client_id,
+                    |tab: &mut Tab, client_id: ClientId| {
+                        match tab.copy_selection_if_active(client_id) {
+                            Ok(true) => {
+                                tab.reset_selection(client_id);
+                            },
+                            Ok(false) => {
+                                if let Some(plugin_id) = intercepted_plugin_id {
+                                    if let Some(key_with_modifier) = key_with_modifier.as_ref() {
+                                        let _ = plugin_senders.send_to_plugin(
+                                            PluginInstruction::Update(vec![(
+                                                Some(plugin_id),
+                                                Some(client_id),
+                                                Event::InterceptedKeyPress(
+                                                    key_with_modifier.clone(),
+                                                ),
+                                            )]),
+                                        );
+                                    }
+                                } else if let (Some(raw_bytes), Some(is_kitty_keyboard_protocol)) =
+                                    (raw_bytes, is_kitty_keyboard_protocol)
+                                {
+                                    let write_result = match tab.is_sync_panes_active() {
+                                        true => tab.write_to_terminals_on_current_tab(
+                                            &key_with_modifier,
+                                            raw_bytes,
+                                            is_kitty_keyboard_protocol,
+                                            client_id,
+                                        ),
+                                        false => tab.write_to_active_terminal(
+                                            &key_with_modifier,
+                                            raw_bytes,
+                                            is_kitty_keyboard_protocol,
+                                            client_id,
+                                        ),
+                                    };
+                                    if let Ok(true) = write_result {
+                                        session_state_changed = true;
+                                    }
+                                }
+                            },
+                            Err(e) => log::error!("{}", e),
+                        }
+                    }
+                );
+                if session_state_changed {
+                    screen.log_and_report_session_state()?;
+                }
                 screen.render(None)?;
             },
             ScreenInstruction::Exit => {
