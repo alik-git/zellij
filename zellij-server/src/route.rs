@@ -18,9 +18,9 @@ use uuid::Uuid;
 use zellij_utils::{
     channels::SenderWithContext,
     data::{
-        BareKey, ConnectToSession, Direction, Event, InputMode, KeyModifier, ListPanesResponse,
-        ListTabsResponse, NewPanePlacement, PaneListEntry, ResizeStrategy, TabInfo,
-        UnblockCondition,
+        BareKey, ConnectToSession, Direction, Event, InputMode, KeyModifier, KeyWithModifier,
+        ListPanesResponse, ListTabsResponse, NewPanePlacement, PaneListEntry, ResizeStrategy,
+        TabInfo, UnblockCondition,
     },
     envs,
     errors::prelude::*,
@@ -203,6 +203,9 @@ pub(crate) fn route_action(
     mut seen_cli_pipes: Option<&mut HashSet<String>>,
     default_mode: InputMode,
     os_input: Option<Box<dyn ServerOsApi>>,
+    key_with_modifier: Option<KeyWithModifier>,
+    raw_bytes: Option<Vec<u8>>,
+    is_kitty_keyboard_protocol: Option<bool>,
 ) -> Result<(bool, Option<ActionCompletionResult>)> {
     let mut should_break = false;
     let err_context = || format!("failed to route action for client {client_id}");
@@ -1186,6 +1189,17 @@ pub(crate) fn route_action(
         Action::Copy => {
             senders
                 .send_to_screen(ScreenInstruction::Copy(
+                    client_id,
+                    Some(NotificationEnd::new(completion_tx)),
+                ))
+                .with_context(err_context)?;
+        },
+        Action::SmartCopy => {
+            senders
+                .send_to_screen(ScreenInstruction::SmartCopy(
+                    key_with_modifier,
+                    raw_bytes,
+                    is_kitty_keyboard_protocol,
                     client_id,
                     Some(NotificationEnd::new(completion_tx)),
                 ))
@@ -2237,7 +2251,7 @@ pub(crate) fn route_thread_main(
                                         .get_actions_for_key_in_mode_or_default_action(
                                             im,
                                             &key,
-                                            raw_bytes,
+                                            raw_bytes.clone(),
                                             dim,
                                             is_kitty_keyboard_protocol,
                                         );
@@ -2271,6 +2285,9 @@ pub(crate) fn route_thread_main(
                                         Some(&mut seen_cli_pipes),
                                         client_input_mode,
                                         Some(os_input.clone()),
+                                        Some(key.clone()),
+                                        Some(raw_bytes.clone()),
+                                        Some(is_kitty_keyboard_protocol),
                                     ) {
                                         Ok(route_action_should_break) => {
                                             if route_action_should_break.0 {
@@ -2347,6 +2364,9 @@ pub(crate) fn route_thread_main(
                                     Some(&mut seen_cli_pipes),
                                     client_input_mode,
                                     Some(os_input.clone()),
+                                    None,
+                                    None,
+                                    None,
                                 ) {
                                     Ok(route_action_should_break) => {
                                         if route_action_should_break.0 {
