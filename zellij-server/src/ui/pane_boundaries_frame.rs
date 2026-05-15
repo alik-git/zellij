@@ -9,23 +9,111 @@ use zellij_utils::position::Position;
 
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+#[derive(Debug, Clone, Copy)]
+struct ScrollbarThumb {
+    top_row: usize,
+    top_glyph: char,
+    bottom_row: Option<usize>,
+    bottom_glyph: char,
+}
+
+impl ScrollbarThumb {
+    const SUBCELL_STEPS: usize = 8;
+
+    fn new(scroll_offset: usize, scrollback_len: usize, viewport_rows: usize) -> Option<Self> {
+        if scrollback_len == 0 || viewport_rows == 0 {
+            return None;
+        }
+
+        let max_thumb_top = viewport_rows.saturating_sub(1);
+        let scroll_offset = scroll_offset.min(scrollback_len);
+        let remaining_scrollback = scrollback_len.saturating_sub(scroll_offset);
+        let total_steps = max_thumb_top * Self::SUBCELL_STEPS;
+        let thumb_position_steps = (((remaining_scrollback as u128) * (total_steps as u128)
+            + ((scrollback_len / 2) as u128))
+            / (scrollback_len as u128)) as usize;
+        let top_row = thumb_position_steps / Self::SUBCELL_STEPS;
+        let subcell_offset = thumb_position_steps % Self::SUBCELL_STEPS;
+
+        let (top_glyph, bottom_row, bottom_glyph) = if subcell_offset == 0 {
+            ('█', None, ' ')
+        } else {
+            (
+                Self::lower_eighth_block(Self::SUBCELL_STEPS - subcell_offset),
+                Some(top_row + 1),
+                Self::upper_eighth_block(subcell_offset),
+            )
+        };
+        Some(Self {
+            top_row,
+            top_glyph,
+            bottom_row,
+            bottom_glyph,
+        })
+    }
+
+    fn lower_eighth_block(eighths: usize) -> char {
+        match eighths {
+            1 => '▁',
+            2 => '▂',
+            3 => '▃',
+            4 => '▄',
+            5 => '▅',
+            6 => '▆',
+            7 => '▇',
+            _ => '█',
+        }
+    }
+
+    fn upper_eighth_block(eighths: usize) -> char {
+        match eighths {
+            1 => '▔',
+            2 => '🮂',
+            3 => '🮃',
+            4 => '▀',
+            5 => '🮄',
+            6 => '🮅',
+            7 => '🮆',
+            _ => '█',
+        }
+    }
+}
+
 fn foreground_color(characters: &str, color: Option<PaletteColor>) -> Vec<TerminalCharacter> {
     let mut colored_string = Vec::new();
     for character in characters.chars() {
-        let mut styles = RcCharacterStyles::reset();
-        styles.update(|styles| {
-            styles.bold = Some(AnsiCode::On);
-            match color {
-                Some(palette_color) => {
-                    styles.foreground = Some(AnsiCode::from(palette_color));
-                },
-                None => {},
-            }
-        });
-        let terminal_character = TerminalCharacter::new_styled(character, styles);
-        colored_string.push(terminal_character);
+        colored_string.push(styled_character(character, color));
     }
     colored_string
+}
+
+fn foreground_color_singlewidth(
+    character: char,
+    color: Option<PaletteColor>,
+) -> Vec<TerminalCharacter> {
+    vec![styled_singlewidth_character(character, color)]
+}
+
+fn styled_character(character: char, color: Option<PaletteColor>) -> TerminalCharacter {
+    TerminalCharacter::new_styled(character, character_styles(color))
+}
+
+fn styled_singlewidth_character(character: char, color: Option<PaletteColor>) -> TerminalCharacter {
+    TerminalCharacter::new_singlewidth_styled(character, character_styles(color))
+}
+
+fn character_styles(color: Option<PaletteColor>) -> RcCharacterStyles {
+    let mut styles = RcCharacterStyles::reset();
+    styles.update(|styles| {
+        styles.bold = Some(AnsiCode::On);
+        match color {
+            Some(palette_color) => {
+                styles.foreground = Some(AnsiCode::from(palette_color));
+            },
+            None => {},
+        }
+    });
+    styles
 }
 
 fn background_color(characters: &str, color: Option<PaletteColor>) -> Vec<TerminalCharacter> {
@@ -233,6 +321,31 @@ impl PaneFrame {
                 foreground_color(&short_indication, self.color),
                 short_indication_len,
             ))
+        } else {
+            None
+        }
+    }
+    fn scrollbar_thumb(&self) -> Option<ScrollbarThumb> {
+        let scroll_offset = self.scroll_position.0;
+        let scrollback_len = self.scroll_position.1;
+        let viewport_rows = self.geom.rows.saturating_sub(2);
+        if !self.is_selectable {
+            return None;
+        }
+
+        ScrollbarThumb::new(scroll_offset, scrollback_len, viewport_rows)
+    }
+    fn scrollbar_glyph_for_row(
+        &self,
+        row: usize,
+        scrollbar_thumb: Option<ScrollbarThumb>,
+    ) -> Option<char> {
+        let scrollbar_thumb = scrollbar_thumb?;
+        let viewport_row = row.saturating_sub(1);
+        if viewport_row == scrollbar_thumb.top_row {
+            Some(scrollbar_thumb.top_glyph)
+        } else if Some(viewport_row) == scrollbar_thumb.bottom_row {
+            Some(scrollbar_thumb.bottom_glyph)
         } else {
             None
         }
@@ -956,6 +1069,7 @@ impl PaneFrame {
                 y_coords_of_title,
             ));
         } else {
+            let scrollbar_thumb = self.scrollbar_thumb();
             for row in 0..self.geom.rows {
                 if row == 0 {
                     // top row
@@ -1023,8 +1137,13 @@ impl PaneFrame {
                 } else {
                     let boundary_character_left =
                         foreground_color(boundary_type::VERTICAL, self.color);
-                    let boundary_character_right =
-                        foreground_color(boundary_type::VERTICAL, self.color);
+                    let boundary_character_right = if let Some(scrollbar_glyph) =
+                        self.scrollbar_glyph_for_row(row, scrollbar_thumb)
+                    {
+                        foreground_color_singlewidth(scrollbar_glyph, self.color)
+                    } else {
+                        foreground_color(boundary_type::VERTICAL, self.color)
+                    };
 
                     let x = self.geom.x;
                     let y = self.geom.y + row;
@@ -1180,5 +1299,41 @@ impl PaneFrame {
         ret.append(&mut foreground_color(&padding, self.color));
         ret.append(&mut right_boundary);
         ret
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ScrollbarThumb;
+
+    #[test]
+    fn scrollbar_thumb_tracks_scrollback_bounds() {
+        let viewport_rows = 10;
+
+        let bottom = ScrollbarThumb::new(0, 100, viewport_rows).unwrap();
+        assert_eq!(bottom.top_row, viewport_rows - 1);
+        assert_eq!(bottom.top_glyph, '█');
+        assert_eq!(bottom.bottom_row, None);
+
+        let top = ScrollbarThumb::new(100, 100, viewport_rows).unwrap();
+        assert_eq!(top.top_row, 0);
+        assert_eq!(top.top_glyph, '█');
+        assert_eq!(top.bottom_row, None);
+    }
+
+    #[test]
+    fn scrollbar_thumb_uses_contiguous_eighth_cell_steps() {
+        let thumb = ScrollbarThumb::new(46, 100, 3).unwrap();
+
+        assert_eq!(thumb.top_row, 1);
+        assert_eq!(thumb.top_glyph, '▇');
+        assert_eq!(thumb.bottom_row, Some(2));
+        assert_eq!(thumb.bottom_glyph, '▔');
+    }
+
+    #[test]
+    fn scrollbar_thumb_handles_empty_ranges() {
+        assert!(ScrollbarThumb::new(0, 0, 10).is_none());
+        assert!(ScrollbarThumb::new(0, 10, 0).is_none());
     }
 }

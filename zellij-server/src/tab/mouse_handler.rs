@@ -12,6 +12,8 @@ use crate::ClientId;
 
 use super::{Pane, Tab};
 
+const CTRL_MOUSE_SCROLL_LINES: usize = 5;
+
 /// Remove the hover pane tracking for `client_id` and clear the hover position
 /// on the previously hovered pane (if any).  Returns `true` if a pane was
 /// cleared.
@@ -147,12 +149,6 @@ enum MouseAction {
     ScrollDown {
         pane_id: PaneId,
         lines: usize,
-    },
-    ResizeScrollUp {
-        pane_id: PaneId,
-    },
-    ResizeScrollDown {
-        pane_id: PaneId,
     },
     UpdateHover {
         pane_id: Option<PaneId>,
@@ -626,24 +622,6 @@ impl MouseHandler {
         Ok(())
     }
 
-    fn resize_tiled_pane_with_stacked_resize(
-        tab: &mut Tab,
-        pane_id: PaneId,
-        strategy: &ResizeStrategy,
-    ) -> Result<()> {
-        let err_context = || format!("failed to resize tiled pane {pane_id:?}");
-
-        tab.tiled_panes
-            // we override the resize percent because it's better UX to have smaller increments
-            // with the mouse wheel
-            .stacked_resize_pane_with_id(pane_id, strategy, Some((5.0, 5.0)))
-            .with_context(err_context)?;
-
-        tab.swap_layouts.set_is_tiled_damaged();
-
-        Ok(())
-    }
-
     fn execute_mouse_action(
         tab: &mut Tab,
         action: MouseAction,
@@ -776,12 +754,6 @@ impl MouseHandler {
             MouseAction::ScrollDown { pane_id: _, lines } => {
                 Self::handle_scrollwheel_down(tab, &event.position, lines, client_id)
                     .with_context(err_context)
-            },
-            MouseAction::ResizeScrollUp { pane_id } => {
-                Self::handle_resize_scroll_up(tab, pane_id, client_id).with_context(err_context)
-            },
-            MouseAction::ResizeScrollDown { pane_id } => {
-                Self::handle_resize_scroll_down(tab, pane_id, client_id).with_context(err_context)
             },
             MouseAction::UpdateHover { pane_id, position } => {
                 Self::execute_update_hover(tab, pane_id, position, client_id)
@@ -1254,25 +1226,16 @@ impl MouseHandler {
 
         if event.wheel_up || event.wheel_down {
             if let Some(pane_id) = ctx.pane_id_at_position {
-                if event.ctrl {
-                    if event.wheel_up {
-                        return Ok(MouseAction::ResizeScrollUp { pane_id });
-                    }
-                    if event.wheel_down {
-                        return Ok(MouseAction::ResizeScrollDown { pane_id });
-                    }
-                }
+                let lines = if event.ctrl {
+                    CTRL_MOUSE_SCROLL_LINES
+                } else {
+                    ctx.mouse_scroll_lines
+                };
                 if event.wheel_up {
-                    return Ok(MouseAction::ScrollUp {
-                        pane_id,
-                        lines: ctx.mouse_scroll_lines,
-                    });
+                    return Ok(MouseAction::ScrollUp { pane_id, lines });
                 }
                 if event.wheel_down {
-                    return Ok(MouseAction::ScrollDown {
-                        pane_id,
-                        lines: ctx.mouse_scroll_lines,
-                    });
+                    return Ok(MouseAction::ScrollDown { pane_id, lines });
                 }
             }
             return Ok(MouseAction::NoAction);
@@ -1533,6 +1496,7 @@ impl MouseHandler {
             format!("failed to handle scrollwheel up at position {point:?} for client {client_id}")
         };
 
+        let mut scrolled_pane = false;
         if let Some(pane) = Self::get_pane_at(tab, point, false).with_context(err_context)? {
             let relative_position = pane.relative_position(point);
             if let Some(mouse_event) = pane.mouse_scroll_up(&relative_position) {
@@ -1547,7 +1511,11 @@ impl MouseHandler {
                 }
             } else {
                 pane.scroll_up(lines, client_id);
+                scrolled_pane = true;
             }
+        }
+        if scrolled_pane {
+            tab.set_force_render();
         }
         Ok(MouseEffect::default())
     }
@@ -1564,6 +1532,7 @@ impl MouseHandler {
             )
         };
 
+        let mut scrolled_pane = false;
         if let Some(pane) = Self::get_pane_at(tab, point, false).with_context(err_context)? {
             let relative_position = pane.relative_position(point);
             if let Some(mouse_event) = pane.mouse_scroll_down(&relative_position) {
@@ -1578,6 +1547,7 @@ impl MouseHandler {
                 }
             } else {
                 pane.scroll_down(lines, client_id);
+                scrolled_pane = true;
                 if !pane.is_scrolled() {
                     if let PaneId::Terminal(pid) = pane.pid() {
                         tab.process_pending_vte_events(pid)
@@ -1586,75 +1556,10 @@ impl MouseHandler {
                 }
             }
         }
+        if scrolled_pane {
+            tab.set_force_render();
+        }
         Ok(MouseEffect::default())
-    }
-
-    fn handle_resize_scroll_up(
-        tab: &mut Tab,
-        pane_id: PaneId,
-        client_id: ClientId,
-    ) -> Result<MouseEffect> {
-        let err_context = || format!("failed to handle resize scroll up for pane {pane_id:?}");
-
-        let is_floating = tab.floating_panes.panes_contain(&pane_id);
-
-        let strategy = ResizeStrategy {
-            resize: Resize::Increase,
-            direction: None,
-            invert_on_boundaries: false,
-        };
-
-        if is_floating {
-            Self::resize_floating_pane_with_strategies(tab, pane_id, &[strategy], (5, 2))
-                .with_context(err_context)?;
-            tab.swap_layouts.set_is_floating_damaged();
-        } else {
-            // we only resize the active pane for tiled panes (better ux)
-            let active_pane_id = tab
-                .get_active_pane_id(client_id)
-                .ok_or_else(|| anyhow!("Failed to find active pane"))?;
-
-            Self::resize_tiled_pane_with_stacked_resize(tab, active_pane_id, &strategy)
-                .with_context(err_context)?;
-            tab.swap_layouts.set_is_tiled_damaged();
-        }
-
-        tab.set_force_render();
-        Ok(MouseEffect::state_changed())
-    }
-
-    fn handle_resize_scroll_down(
-        tab: &mut Tab,
-        pane_id: PaneId,
-        client_id: ClientId,
-    ) -> Result<MouseEffect> {
-        let err_context = || format!("failed to handle resize scroll down for pane {pane_id:?}");
-
-        let is_floating = tab.floating_panes.panes_contain(&pane_id);
-
-        let strategy = ResizeStrategy {
-            resize: Resize::Decrease,
-            direction: None,
-            invert_on_boundaries: false,
-        };
-
-        if is_floating {
-            Self::resize_floating_pane_with_strategies(tab, pane_id, &[strategy], (5, 2))
-                .with_context(err_context)?;
-            tab.swap_layouts.set_is_floating_damaged();
-        } else {
-            // we only resize the active pane for tiled panes (better ux)
-            let active_pane_id = tab
-                .get_active_pane_id(client_id)
-                .ok_or_else(|| anyhow!("Failed to find active pane"))?;
-
-            Self::resize_tiled_pane_with_stacked_resize(tab, active_pane_id, &strategy)
-                .with_context(err_context)?;
-            tab.swap_layouts.set_is_tiled_damaged();
-        }
-
-        tab.set_force_render();
-        Ok(MouseEffect::state_changed())
     }
 
     fn get_pane_at<'a>(
