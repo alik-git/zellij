@@ -1496,7 +1496,6 @@ impl MouseHandler {
             format!("failed to handle scrollwheel up at position {point:?} for client {client_id}")
         };
 
-        let mut scrolled_pane = false;
         if let Some(pane) = Self::get_pane_at(tab, point, false).with_context(err_context)? {
             let relative_position = pane.relative_position(point);
             if let Some(mouse_event) = pane.mouse_scroll_up(&relative_position) {
@@ -1511,11 +1510,7 @@ impl MouseHandler {
                 }
             } else {
                 pane.scroll_up(lines, client_id);
-                scrolled_pane = true;
             }
-        }
-        if scrolled_pane {
-            tab.set_force_render();
         }
         Ok(MouseEffect::default())
     }
@@ -1532,7 +1527,6 @@ impl MouseHandler {
             )
         };
 
-        let mut scrolled_pane = false;
         if let Some(pane) = Self::get_pane_at(tab, point, false).with_context(err_context)? {
             let relative_position = pane.relative_position(point);
             if let Some(mouse_event) = pane.mouse_scroll_down(&relative_position) {
@@ -1547,7 +1541,6 @@ impl MouseHandler {
                 }
             } else {
                 pane.scroll_down(lines, client_id);
-                scrolled_pane = true;
                 if !pane.is_scrolled() {
                     if let PaneId::Terminal(pid) = pane.pid() {
                         tab.process_pending_vte_events(pid)
@@ -1555,9 +1548,6 @@ impl MouseHandler {
                     }
                 }
             }
-        }
-        if scrolled_pane {
-            tab.set_force_render();
         }
         Ok(MouseEffect::default())
     }
