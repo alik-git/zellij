@@ -313,6 +313,7 @@ pub trait Pane {
     fn scroll_position_and_length(&self) -> Option<(usize, usize)> {
         None
     }
+    fn set_scroll_position(&mut self, _position: usize, _client_id: ClientId) {}
     fn clear_scroll(&mut self);
     fn is_scrolled(&self) -> bool;
     fn active_at(&self) -> Instant;

@@ -648,11 +648,8 @@ impl MouseHandler {
                 return Ok(false);
             };
 
-            if target_offset > current_offset {
-                pane.scroll_up(target_offset - current_offset, client_id);
-                true
-            } else if target_offset < current_offset {
-                pane.scroll_down(current_offset - target_offset, client_id);
+            if target_offset != current_offset {
+                pane.set_scroll_position(target_offset, client_id);
                 if !pane.is_scrolled() {
                     if let PaneId::Terminal(pid) = pane.pid() {
                         reached_bottom_terminal = Some(pid);

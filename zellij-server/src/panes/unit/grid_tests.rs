@@ -2564,6 +2564,78 @@ pub fn scroll_down() {
 }
 
 #[test]
+pub fn move_viewport_to_scroll_position_matches_repeated_line_scroll() {
+    let sixel_image_store = Rc::new(RefCell::new(SixelImageStore::default()));
+    let terminal_emulator_color_codes = Rc::new(RefCell::new(HashMap::new()));
+    let debug = false;
+    let arrow_fonts = true;
+    let styled_underlines = true;
+    let osc8_hyperlinks = true;
+    let explicitly_disable_kitty_keyboard_protocol = false;
+    let fixture_name = "scrolling";
+    let content = read_fixture(fixture_name);
+
+    let mut repeated_scroll_grid = Grid::new(
+        10,
+        50,
+        Rc::new(RefCell::new(Palette::default())),
+        terminal_emulator_color_codes.clone(),
+        Rc::new(RefCell::new(LinkHandler::new())),
+        Rc::new(RefCell::new(None)),
+        sixel_image_store.clone(),
+        Style::default(),
+        debug,
+        arrow_fonts,
+        styled_underlines,
+        osc8_hyperlinks,
+        explicitly_disable_kitty_keyboard_protocol,
+    );
+    let mut absolute_scroll_grid = Grid::new(
+        10,
+        50,
+        Rc::new(RefCell::new(Palette::default())),
+        terminal_emulator_color_codes,
+        Rc::new(RefCell::new(LinkHandler::new())),
+        Rc::new(RefCell::new(None)),
+        sixel_image_store,
+        Style::default(),
+        debug,
+        arrow_fonts,
+        styled_underlines,
+        osc8_hyperlinks,
+        explicitly_disable_kitty_keyboard_protocol,
+    );
+    let mut repeated_parser = vte::Parser::new();
+    let mut absolute_parser = vte::Parser::new();
+    for byte in content {
+        repeated_parser.advance(&mut repeated_scroll_grid, byte);
+        absolute_parser.advance(&mut absolute_scroll_grid, byte);
+    }
+
+    repeated_scroll_grid.move_viewport_up(7);
+    absolute_scroll_grid.move_viewport_to_scroll_position(7);
+    assert_eq!(
+        absolute_scroll_grid.scrollback_position_and_length(),
+        repeated_scroll_grid.scrollback_position_and_length()
+    );
+    assert_eq!(
+        format!("{:?}", absolute_scroll_grid),
+        format!("{:?}", repeated_scroll_grid)
+    );
+
+    repeated_scroll_grid.move_viewport_down(4);
+    absolute_scroll_grid.move_viewport_to_scroll_position(3);
+    assert_eq!(
+        absolute_scroll_grid.scrollback_position_and_length(),
+        repeated_scroll_grid.scrollback_position_and_length()
+    );
+    assert_eq!(
+        format!("{:?}", absolute_scroll_grid),
+        format!("{:?}", repeated_scroll_grid)
+    );
+}
+
+#[test]
 pub fn scroll_up_with_line_wraps() {
     let mut vte_parser = vte::Parser::new();
     let sixel_image_store = Rc::new(RefCell::new(SixelImageStore::default()));

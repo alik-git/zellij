@@ -1143,7 +1143,7 @@ impl Grid {
         y_coordinates
     }
 
-    pub fn scroll_up_one_line(&mut self) -> bool {
+    fn scroll_up_one_line_without_render(&mut self) -> bool {
         let mut found_something = false;
         if !self.lines_above.is_empty() && self.viewport.len() == self.height {
             self.is_scrolled = true;
@@ -1167,10 +1167,16 @@ impl Grid {
                 .search_results
                 .move_down(1, &self.viewport, self.height);
         }
+        found_something
+    }
+
+    pub fn scroll_up_one_line(&mut self) -> bool {
+        let found_something = self.scroll_up_one_line_without_render();
         self.output_buffer.update_all_lines();
         found_something
     }
-    pub fn scroll_down_one_line(&mut self) -> bool {
+
+    fn scroll_down_one_line_without_render(&mut self) -> bool {
         let mut found_something = false;
         if !self.lines_below.is_empty()
             && self.viewport.len() == self.height
@@ -1219,11 +1225,16 @@ impl Grid {
             found_something =
                 self.search_results
                     .move_up(1, &self.viewport, &self.lines_below, self.height);
-            self.output_buffer.update_all_lines();
         }
         if self.lines_below.is_empty() {
             self.is_scrolled = false;
         }
+        found_something
+    }
+
+    pub fn scroll_down_one_line(&mut self) -> bool {
+        let found_something = self.scroll_down_one_line_without_render();
+        self.output_buffer.update_all_lines();
         found_something
     }
     pub fn force_change_size(&mut self, new_rows: usize, new_columns: usize) {
@@ -1711,15 +1722,23 @@ impl Grid {
     }
     pub fn move_viewport_up(&mut self, count: usize) {
         for _ in 0..count {
-            self.scroll_up_one_line();
+            self.scroll_up_one_line_without_render();
         }
         self.output_buffer.update_all_lines();
     }
     pub fn move_viewport_down(&mut self, count: usize) {
         for _ in 0..count {
-            self.scroll_down_one_line();
+            self.scroll_down_one_line_without_render();
         }
         self.output_buffer.update_all_lines();
+    }
+    pub fn move_viewport_to_scroll_position(&mut self, target_offset: usize) {
+        let current_offset = self.scrollback_position_and_length().0;
+        if target_offset > current_offset {
+            self.move_viewport_up(target_offset - current_offset);
+        } else if target_offset < current_offset {
+            self.move_viewport_down(current_offset - target_offset);
+        }
     }
     pub fn reset_viewport(&mut self) {
         let max_lines_to_scroll = *SCROLL_BUFFER_SIZE.get().unwrap() * 2; // while not very elegant, this can prevent minor bugs from becoming showstoppers by sticking the whole app display in an endless loop
