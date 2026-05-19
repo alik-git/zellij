@@ -8,6 +8,7 @@ use zellij_utils::position::Position;
 use crate::background_jobs::BackgroundJob;
 use crate::panes::PaneId;
 use crate::plugins::PluginInstruction;
+use crate::ui::pane_boundaries_frame::ScrollbarThumb;
 use crate::ClientId;
 
 use super::{Pane, Tab};
@@ -25,6 +26,39 @@ fn clear_hover_for_client(tab: &mut Tab, client_id: ClientId) -> bool {
         true
     } else {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MouseHandler;
+
+    #[test]
+    fn scrollbar_drag_row_maps_to_expected_scroll_offsets() {
+        assert_eq!(
+            MouseHandler::scroll_offset_for_scrollbar_viewport_row(0, 9, 90),
+            90
+        );
+        assert_eq!(
+            MouseHandler::scroll_offset_for_scrollbar_viewport_row(9, 9, 90),
+            0
+        );
+        assert_eq!(
+            MouseHandler::scroll_offset_for_scrollbar_viewport_row(5, 10, 100),
+            50
+        );
+    }
+
+    #[test]
+    fn scrollbar_drag_row_clamps_to_scrollbar_bounds() {
+        assert_eq!(
+            MouseHandler::scroll_offset_for_scrollbar_viewport_row(20, 10, 100),
+            0
+        );
+        assert_eq!(
+            MouseHandler::scroll_offset_for_scrollbar_viewport_row(0, 0, 100),
+            0
+        );
     }
 }
 
@@ -111,6 +145,16 @@ enum MouseAction {
     StopResize {
         position: Position,
     },
+    StartScrollbarDrag {
+        pane_id: PaneId,
+        position: Position,
+    },
+    ContinueScrollbarDrag {
+        position: Position,
+    },
+    StopScrollbarDrag {
+        position: Position,
+    },
     FocusPane {
         pane_id: PaneId,
         position: Position,
@@ -190,6 +234,11 @@ pub struct PaneResizeState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PaneScrollDragState {
+    pub pane_id: PaneId,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ClickedPaneDetails {
     pane_id: PaneId,
     on_frame: bool,
@@ -197,6 +246,7 @@ struct ClickedPaneDetails {
     edge: Option<PaneEdge>,
     is_floating: bool,
     terminal_wants_mouse: bool,
+    scrollbar_thumb_hit: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -205,6 +255,7 @@ struct MouseEventContext {
     active_pane_id: Option<PaneId>,
     floating_visible: bool,
     pane_being_resized: bool,
+    pane_being_scrolled: bool,
     selecting_with_mouse: bool,
     pane_being_moved: bool,
     clicked_pane: Option<ClickedPaneDetails>,
@@ -389,6 +440,7 @@ impl MouseHandler {
             active_pane_id,
             floating_visible,
             pane_being_resized: tab.pane_being_resized_with_mouse.is_some(),
+            pane_being_scrolled: tab.pane_being_scrolled_with_mouse.is_some(),
             selecting_with_mouse: tab.selecting_with_mouse_in_pane.is_some(),
             pane_being_moved: tab.floating_panes.pane_is_being_moved_with_mouse(),
             clicked_pane,
@@ -418,6 +470,9 @@ impl MouseHandler {
         } else {
             None
         };
+        let scrollbar_thumb_hit = on_frame
+            && matches!(pane.pid(), PaneId::Terminal(_))
+            && Self::position_is_on_scrollbar_thumb(pane.as_ref(), position);
         let terminal_wants_mouse = if Some(pane_id) == active_pane_id {
             let relative_position = pane.relative_position(position);
             pane.mouse_left_click(&relative_position, false).is_some()
@@ -432,6 +487,7 @@ impl MouseHandler {
             edge,
             is_floating,
             terminal_wants_mouse,
+            scrollbar_thumb_hit,
         })
     }
 
@@ -568,6 +624,123 @@ impl MouseHandler {
         Ok(never_resized)
     }
 
+    fn start_scrollbar_drag(tab: &mut Tab, pane_id: PaneId) {
+        tab.pane_being_scrolled_with_mouse = Some(PaneScrollDragState { pane_id });
+    }
+
+    fn continue_scrollbar_drag(
+        tab: &mut Tab,
+        position: Position,
+        client_id: ClientId,
+    ) -> Result<bool> {
+        let Some(scroll_state) = tab.pane_being_scrolled_with_mouse else {
+            return Ok(false);
+        };
+
+        let mut reached_bottom_terminal = None;
+        let scrolled = if let Some(pane) = tab.get_pane_with_id_mut(scroll_state.pane_id) {
+            let Some(target_offset) =
+                Self::scroll_offset_for_scrollbar_position(pane.as_ref(), &position)
+            else {
+                return Ok(false);
+            };
+            let Some((current_offset, _scrollback_len)) = pane.scroll_position_and_length() else {
+                return Ok(false);
+            };
+
+            if target_offset > current_offset {
+                pane.scroll_up(target_offset - current_offset, client_id);
+                true
+            } else if target_offset < current_offset {
+                pane.scroll_down(current_offset - target_offset, client_id);
+                if !pane.is_scrolled() {
+                    if let PaneId::Terminal(pid) = pane.pid() {
+                        reached_bottom_terminal = Some(pid);
+                    }
+                }
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        if let Some(pid) = reached_bottom_terminal {
+            tab.process_pending_vte_events(pid)?;
+        }
+
+        Ok(scrolled)
+    }
+
+    fn stop_scrollbar_drag(
+        tab: &mut Tab,
+        final_position: Position,
+        client_id: ClientId,
+    ) -> Result<bool> {
+        let scrolled = Self::continue_scrollbar_drag(tab, final_position, client_id)?;
+        tab.pane_being_scrolled_with_mouse = None;
+        Ok(scrolled)
+    }
+
+    fn position_is_on_scrollbar_thumb(pane: &dyn Pane, position: &Position) -> bool {
+        let Some((scroll_offset, scrollback_len)) = pane.scroll_position_and_length() else {
+            return false;
+        };
+        let viewport_rows = pane.get_content_rows();
+        if scrollback_len == 0 || viewport_rows == 0 || !pane.selectable() {
+            return false;
+        }
+        if position.column() != pane.x() + pane.cols().saturating_sub(1) {
+            return false;
+        }
+        let content_y = pane.get_content_y() as isize;
+        let line = position.line();
+        if line < content_y || line >= content_y + viewport_rows as isize {
+            return false;
+        }
+        let viewport_row = (line - content_y) as usize;
+        ScrollbarThumb::new(scroll_offset, scrollback_len, viewport_rows)
+            .map(|thumb| thumb.contains_viewport_row(viewport_row))
+            .unwrap_or(false)
+    }
+
+    fn scroll_offset_for_scrollbar_position(pane: &dyn Pane, position: &Position) -> Option<usize> {
+        let (_scroll_offset, scrollback_len) = pane.scroll_position_and_length()?;
+        let viewport_rows = pane.get_content_rows();
+        if scrollback_len == 0 || viewport_rows == 0 {
+            return None;
+        }
+        let max_thumb_top = viewport_rows.saturating_sub(1);
+        if max_thumb_top == 0 {
+            return Some(0);
+        }
+
+        let content_y = pane.get_content_y() as isize;
+        let unclamped_viewport_row = position.line() - content_y;
+        let viewport_row = unclamped_viewport_row.max(0).min(max_thumb_top as isize) as usize;
+        Some(Self::scroll_offset_for_scrollbar_viewport_row(
+            viewport_row,
+            max_thumb_top,
+            scrollback_len,
+        ))
+    }
+
+    fn scroll_offset_for_scrollbar_viewport_row(
+        viewport_row: usize,
+        max_thumb_top: usize,
+        scrollback_len: usize,
+    ) -> usize {
+        if max_thumb_top == 0 {
+            return 0;
+        }
+        let viewport_row = viewport_row.min(max_thumb_top);
+        let scroll_down_amount = (((viewport_row as u128) * (scrollback_len as u128)
+            + ((max_thumb_top / 2) as u128))
+            / (max_thumb_top as u128)) as usize;
+        scrollback_len.saturating_sub(scroll_down_amount)
+    }
+
     fn resize_floating_pane_with_strategies(
         tab: &mut Tab,
         pane_id: PaneId,
@@ -689,6 +862,34 @@ impl MouseHandler {
             },
             MouseAction::StopResize { position } => {
                 Self::execute_stop_resize(tab, position, client_id)
+            },
+            MouseAction::StartScrollbarDrag { pane_id, position } => {
+                Self::start_scrollbar_drag(tab, pane_id);
+                let state_changed = Self::continue_scrollbar_drag(tab, position, client_id)
+                    .with_context(err_context)?;
+                if state_changed {
+                    Ok(MouseEffect::state_changed())
+                } else {
+                    Ok(MouseEffect::default())
+                }
+            },
+            MouseAction::ContinueScrollbarDrag { position } => {
+                let state_changed = Self::continue_scrollbar_drag(tab, position, client_id)
+                    .with_context(err_context)?;
+                if state_changed {
+                    Ok(MouseEffect::state_changed())
+                } else {
+                    Ok(MouseEffect::default())
+                }
+            },
+            MouseAction::StopScrollbarDrag { position } => {
+                let state_changed = Self::stop_scrollbar_drag(tab, position, client_id)
+                    .with_context(err_context)?;
+                if state_changed {
+                    Ok(MouseEffect::state_changed())
+                } else {
+                    Ok(MouseEffect::default())
+                }
             },
             MouseAction::FocusPane {
                 pane_id: _,
@@ -1180,6 +1381,18 @@ impl MouseHandler {
             });
         }
 
+        if ctx.pane_being_scrolled {
+            return Ok(match event.event_type {
+                MouseEventType::Motion if event.left => MouseAction::ContinueScrollbarDrag {
+                    position: event.position,
+                },
+                MouseEventType::Release => MouseAction::StopScrollbarDrag {
+                    position: event.position,
+                },
+                _ => MouseAction::NoAction,
+            });
+        }
+
         if ctx.selecting_with_mouse {
             return Ok(match event.event_type {
                 MouseEventType::Motion if event.left => MouseAction::UpdateSelection {
@@ -1279,6 +1492,13 @@ impl MouseHandler {
                 .unwrap_or(false);
 
             if details.on_frame {
+                if details.scrollbar_thumb_hit {
+                    return Ok(MouseAction::StartScrollbarDrag {
+                        pane_id: details.pane_id,
+                        position: event.position,
+                    });
+                }
+
                 if details.frame_intercepted {
                     return Ok(MouseAction::FrameIntercepted {
                         pane_id: details.pane_id,

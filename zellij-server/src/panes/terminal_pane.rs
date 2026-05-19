@@ -591,6 +591,9 @@ impl Pane for TerminalPane {
         self.grid.move_viewport_down(count);
         self.set_should_render(true);
     }
+    fn scroll_position_and_length(&self) -> Option<(usize, usize)> {
+        Some(self.grid.scrollback_position_and_length())
+    }
     fn clear_scroll(&mut self) {
         self.grid.reset_viewport();
         self.set_should_render(true);

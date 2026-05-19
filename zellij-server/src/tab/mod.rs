@@ -9,7 +9,9 @@ mod swap_layouts;
 
 use crate::plugins::PluginId;
 use copy_command::CopyCommand;
-pub use mouse_handler::{MouseEffect, MouseHandler, PaneEdge, PaneResizeState};
+pub use mouse_handler::{
+    MouseEffect, MouseHandler, PaneEdge, PaneResizeState, PaneScrollDragState,
+};
 use std::env::temp_dir;
 use std::net::IpAddr;
 use std::path::PathBuf;
@@ -184,6 +186,7 @@ pub(crate) struct Tab {
     pending_vte_events: HashMap<u32, Vec<VteBytes>>,
     pub selecting_with_mouse_in_pane: Option<PaneId>, // this is only pub for the tests
     pane_being_resized_with_mouse: Option<PaneResizeState>,
+    pane_being_scrolled_with_mouse: Option<PaneScrollDragState>,
     link_handler: Rc<RefCell<LinkHandler>>,
     clipboard_provider: ClipboardProvider,
     // TODO: used only to focus the pane when the layout is loaded
@@ -307,6 +310,9 @@ pub trait Pane {
     }
     fn scroll_up(&mut self, count: usize, client_id: ClientId);
     fn scroll_down(&mut self, count: usize, client_id: ClientId);
+    fn scroll_position_and_length(&self) -> Option<(usize, usize)> {
+        None
+    }
     fn clear_scroll(&mut self);
     fn is_scrolled(&self) -> bool;
     fn active_at(&self) -> Instant;
@@ -845,6 +851,7 @@ impl Tab {
             connected_clients,
             selecting_with_mouse_in_pane: None,
             pane_being_resized_with_mouse: None,
+            pane_being_scrolled_with_mouse: None,
             link_handler: Rc::new(RefCell::new(LinkHandler::new())),
             clipboard_provider,
             focus_pane_id: None,

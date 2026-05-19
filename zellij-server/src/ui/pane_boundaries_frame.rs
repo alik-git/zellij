@@ -10,17 +10,21 @@ use zellij_utils::position::Position;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 #[derive(Debug, Clone, Copy)]
-struct ScrollbarThumb {
-    top_row: usize,
+pub(crate) struct ScrollbarThumb {
+    pub top_row: usize,
     top_glyph: char,
-    bottom_row: Option<usize>,
+    pub bottom_row: Option<usize>,
     bottom_glyph: char,
 }
 
 impl ScrollbarThumb {
     const SUBCELL_STEPS: usize = 8;
 
-    fn new(scroll_offset: usize, scrollback_len: usize, viewport_rows: usize) -> Option<Self> {
+    pub(crate) fn new(
+        scroll_offset: usize,
+        scrollback_len: usize,
+        viewport_rows: usize,
+    ) -> Option<Self> {
         if scrollback_len == 0 || viewport_rows == 0 {
             return None;
         }
@@ -50,6 +54,10 @@ impl ScrollbarThumb {
             bottom_row,
             bottom_glyph,
         })
+    }
+
+    pub(crate) fn contains_viewport_row(&self, viewport_row: usize) -> bool {
+        viewport_row == self.top_row || Some(viewport_row) == self.bottom_row
     }
 
     fn lower_eighth_block(eighths: usize) -> char {
