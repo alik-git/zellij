@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use zellij_utils::data::{Direction, Resize, ResizeStrategy};
 use zellij_utils::errors::prelude::*;
 use zellij_utils::input::mouse::{MouseEvent, MouseEventType};
@@ -14,6 +14,7 @@ use crate::ClientId;
 use super::{Pane, Tab};
 
 const CTRL_MOUSE_SCROLL_LINES: usize = 5;
+const SCROLLBAR_DRAG_THROTTLE: Duration = Duration::from_millis(16);
 
 /// Remove the hover pane tracking for `client_id` and clear the hover position
 /// on the previously hovered pane (if any).  Returns `true` if a pane was
@@ -236,6 +237,8 @@ pub struct PaneResizeState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PaneScrollDragState {
     pub pane_id: PaneId,
+    pending_position: Option<Position>,
+    last_scrolled_at: Option<Instant>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -625,7 +628,11 @@ impl MouseHandler {
     }
 
     fn start_scrollbar_drag(tab: &mut Tab, pane_id: PaneId) {
-        tab.pane_being_scrolled_with_mouse = Some(PaneScrollDragState { pane_id });
+        tab.pane_being_scrolled_with_mouse = Some(PaneScrollDragState {
+            pane_id,
+            pending_position: None,
+            last_scrolled_at: None,
+        });
     }
 
     fn continue_scrollbar_drag(
@@ -633,10 +640,35 @@ impl MouseHandler {
         position: Position,
         client_id: ClientId,
     ) -> Result<bool> {
+        Self::update_pending_scrollbar_drag(tab, position);
+        if !Self::scrollbar_drag_should_flush(tab, Instant::now()) {
+            return Ok(false);
+        };
+        Self::flush_pending_scrollbar_drag(tab, client_id)
+    }
+
+    fn flush_pending_scrollbar_drag(tab: &mut Tab, client_id: ClientId) -> Result<bool> {
+        let Some(position) = tab
+            .pane_being_scrolled_with_mouse
+            .as_mut()
+            .and_then(|scroll_state| scroll_state.pending_position.take())
+        else {
+            return Ok(false);
+        };
+        if let Some(scroll_state) = tab.pane_being_scrolled_with_mouse.as_mut() {
+            scroll_state.last_scrolled_at = Some(Instant::now());
+        }
+        Self::scrollbar_drag_to_position(tab, position, client_id)
+    }
+
+    fn scrollbar_drag_to_position(
+        tab: &mut Tab,
+        position: Position,
+        client_id: ClientId,
+    ) -> Result<bool> {
         let Some(scroll_state) = tab.pane_being_scrolled_with_mouse else {
             return Ok(false);
         };
-
         let mut reached_bottom_terminal = None;
         let scrolled = if let Some(pane) = tab.get_pane_with_id_mut(scroll_state.pane_id) {
             let Some(target_offset) =
@@ -670,12 +702,34 @@ impl MouseHandler {
         Ok(scrolled)
     }
 
+    fn update_pending_scrollbar_drag(tab: &mut Tab, position: Position) {
+        if let Some(scroll_state) = tab.pane_being_scrolled_with_mouse.as_mut() {
+            scroll_state.pending_position = Some(position);
+        }
+    }
+
+    fn scrollbar_drag_should_flush(tab: &Tab, now: Instant) -> bool {
+        tab.pane_being_scrolled_with_mouse
+            .as_ref()
+            .map(|scroll_state| {
+                scroll_state.pending_position.is_some()
+                    && scroll_state
+                        .last_scrolled_at
+                        .map(|last_scrolled_at| {
+                            now.duration_since(last_scrolled_at) >= SCROLLBAR_DRAG_THROTTLE
+                        })
+                        .unwrap_or(true)
+            })
+            .unwrap_or(false)
+    }
+
     fn stop_scrollbar_drag(
         tab: &mut Tab,
         final_position: Position,
         client_id: ClientId,
     ) -> Result<bool> {
-        let scrolled = Self::continue_scrollbar_drag(tab, final_position, client_id)?;
+        Self::update_pending_scrollbar_drag(tab, final_position);
+        let scrolled = Self::flush_pending_scrollbar_drag(tab, client_id)?;
         tab.pane_being_scrolled_with_mouse = None;
         Ok(scrolled)
     }
