@@ -214,6 +214,7 @@ pub(crate) struct Tab {
     last_mouse_activity_time: HashMap<ClientId, Instant>,
     current_pane_group: Rc<RefCell<PaneGroups>>,
     advanced_mouse_actions: bool,
+    mouse_scroll_lines: usize,
     mouse_hover_effects: bool,
     focus_follows_mouse: bool,
     mouse_click_through: bool,
@@ -758,6 +759,7 @@ impl Tab {
         current_pane_group: Rc<RefCell<PaneGroups>>,
         currently_marking_pane_group: Rc<RefCell<HashMap<ClientId, bool>>>,
         advanced_mouse_actions: bool,
+        mouse_scroll_lines: usize,
         mouse_hover_effects: bool,
         focus_follows_mouse: bool,
         mouse_click_through: bool,
@@ -869,6 +871,7 @@ impl Tab {
             current_pane_group,
             currently_marking_pane_group,
             advanced_mouse_actions,
+            mouse_scroll_lines,
             mouse_hover_effects,
             focus_follows_mouse,
             mouse_click_through,
@@ -5723,6 +5726,9 @@ impl Tab {
     }
     pub fn update_advanced_mouse_actions(&mut self, advanced_mouse_actions: bool) {
         self.advanced_mouse_actions = advanced_mouse_actions;
+    }
+    pub fn update_mouse_scroll_lines(&mut self, mouse_scroll_lines: usize) {
+        self.mouse_scroll_lines = mouse_scroll_lines;
     }
     pub fn update_mouse_hover_effects(&mut self, mouse_hover_effects: bool) {
         self.mouse_hover_effects = mouse_hover_effects;

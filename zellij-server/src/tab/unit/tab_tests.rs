@@ -212,6 +212,7 @@ fn create_new_tab(size: Size, stacked_resize: bool) -> Tab {
         current_pane_group,
         currently_marking_pane_group,
         advanced_mouse_actions,
+        3,     // mouse_scroll_lines
         true,  // mouse_hover_effects
         false, // focus_follows_mouse
         false, // mouse_click_through
@@ -298,6 +299,7 @@ fn create_new_tab_with_layout(size: Size, layout: TiledPaneLayout) -> Tab {
         current_pane_group,
         currently_marking_pane_group,
         advanced_mouse_actions,
+        3,     // mouse_scroll_lines
         true,  // mouse_hover_effects
         false, // focus_follows_mouse
         false, // mouse_click_through
@@ -390,6 +392,7 @@ fn create_new_tab_with_cell_size(
         current_pane_group,
         currently_marking_pane_group,
         advanced_mouse_actions,
+        3,     // mouse_scroll_lines
         true,  // mouse_hover_effects
         false, // focus_follows_mouse
         false, // mouse_click_through

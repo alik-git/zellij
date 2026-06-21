@@ -2697,6 +2697,9 @@ impl Options {
             .map(|(string, _entry)| PathBuf::from(string));
         let mouse_mode =
             kdl_property_first_arg_as_bool_or_error!(kdl_options, "mouse_mode").map(|(v, _)| v);
+        let mouse_scroll_lines =
+            kdl_property_first_arg_as_i64_or_error!(kdl_options, "mouse_scroll_lines")
+                .map(|(mouse_scroll_lines, _entry)| mouse_scroll_lines as usize);
         let scroll_buffer_size =
             kdl_property_first_arg_as_i64_or_error!(kdl_options, "scroll_buffer_size")
                 .map(|(scroll_buffer_size, _entry)| scroll_buffer_size as usize);
@@ -2837,6 +2840,7 @@ impl Options {
             layout_dir,
             theme_dir,
             mouse_mode,
+            mouse_scroll_lines,
             pane_frames,
             mirror_session,
             on_force_close,
@@ -3213,6 +3217,36 @@ impl Options {
             Some(node)
         } else if add_comments {
             let mut node = create_node(false);
+            node.set_leading(format!("{}\n// ", comment_text));
+            Some(node)
+        } else {
+            None
+        }
+    }
+    fn mouse_scroll_lines_to_kdl(&self, add_comments: bool) -> Option<KdlNode> {
+        let comment_text = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}",
+            " ",
+            "// Configure how many lines are scrolled for each mouse wheel event.",
+            "// Increase this for faster mouse wheel scrolling.",
+            "// Valid values: positive integers",
+            "// Default value: 3",
+            "// ",
+        );
+
+        let create_node = |node_value: usize| -> KdlNode {
+            let mut node = KdlNode::new("mouse_scroll_lines");
+            node.push(KdlValue::Base10(node_value as i64));
+            node
+        };
+        if let Some(mouse_scroll_lines) = self.mouse_scroll_lines {
+            let mut node = create_node(mouse_scroll_lines);
+            if add_comments {
+                node.set_leading(format!("{}\n", comment_text));
+            }
+            Some(node)
+        } else if add_comments {
+            let mut node = create_node(3);
             node.set_leading(format!("{}\n// ", comment_text));
             Some(node)
         } else {
@@ -4281,6 +4315,9 @@ impl Options {
         }
         if let Some(mouse_mode) = self.mouse_mode_to_kdl(add_comments) {
             nodes.push(mouse_mode);
+        }
+        if let Some(mouse_scroll_lines) = self.mouse_scroll_lines_to_kdl(add_comments) {
+            nodes.push(mouse_scroll_lines);
         }
         if let Some(pane_frames) = self.pane_frames_to_kdl(add_comments) {
             nodes.push(pane_frames);
@@ -7091,6 +7128,7 @@ fn config_options_to_string() {
         layout_dir "/tmp/layouts"
         theme_dir "/tmp/themes"
         mouse_mode false
+        mouse_scroll_lines 1
         pane_frames false
         mirror_session true
         on_force_close "quit"

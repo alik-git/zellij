@@ -669,6 +669,7 @@ impl From<crate::input::options::Options>
             theme: options.theme,
             theme_dark: options.theme_dark,
             theme_light: options.theme_light,
+            mouse_scroll_lines: options.mouse_scroll_lines.map(|s| s as u32),
             default_mode: options.default_mode.map(|m| input_mode_to_proto_i32(m)),
             default_shell: options
                 .default_shell
@@ -753,6 +754,7 @@ impl TryFrom<crate::client_server_contract::client_server_contract::Options>
             theme: options.theme,
             theme_dark: options.theme_dark,
             theme_light: options.theme_light,
+            mouse_scroll_lines: options.mouse_scroll_lines.map(|s| s as usize),
             default_mode: options
                 .default_mode
                 .map(|m| proto_i32_to_input_mode(m))
